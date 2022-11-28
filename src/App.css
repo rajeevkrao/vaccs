@@ -1,0 +1,49 @@
+.logo.vite:hover {
+  filter: drop-shadow(0 0 2em #747bff);
+}
+
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafb);
+}
+
+#root{
+  color:white;
+}
+
+.bg-dark,#root{
+  background-color: #2f2f2f !important;
+}
+
+.modal-content{
+  background-color:#2f2f2f;
+  color:white;
+}
+
+input.token{
+  width:100%;
+}
+
+.row{
+  justify-content: space-between !important;
+}
+
+.card{
+  max-width: 27vw;
+  margin:1vh 1vw;
+  color:black;
+  text-align: left;
+}
+
+img.rank{
+  width:6vw;
+}
+
+span.copy{
+  cursor:pointer;
+}
+
+button.action{
+  margin:.1rem;
+}
+
+
