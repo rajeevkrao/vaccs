@@ -23,9 +23,9 @@ input.token{
   width:100%;
 }
 
-.row{
+/* .row{
   justify-content: space-between !important;
-}
+} */
 
 .card{
   max-width: 27vw;

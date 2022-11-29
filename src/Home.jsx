@@ -26,12 +26,10 @@ function App() {
   const [token, setToken] = useState("");
   const [accs, setAccs] = useState(null);
   const [ranks, setRanks] = useState(null);
+  const [createState, setCreateState] = useState(0);
 
   const [isAccEditModalOpen, setIsAccEditModalOpen] = useState(false);
   const [AccEditId, setAccEditId] = useState(-1);
-  const [name,setName] = useState("");
-  const [password,setPassword] = useState("");
-  const [rank,setRank] = useState("Unranked");
 
 
   const [messageApi, contextHolder] = message.useMessage();
@@ -53,11 +51,8 @@ function App() {
   const handleAccEditShow = (e) =>{
     let { currentTarget } = e;
     setAccEditId(currentTarget.id)
+    setCreateState(false);
     setIsAccEditModalOpen(true);
-    if(accs[currentTarget.id].name)
-      setName(accs[currentTarget.id].name)
-    setPassword(accs[currentTarget.id].password)
-    setRank(accs[currentTarget.id].rank)
   }
 
   const handleAccAddShow = () =>{
@@ -103,6 +98,10 @@ function App() {
     navigator.clipboard.writeText(accs[currentTarget.id].password)
     setTimeout(()=>{
         navigator.clipboard.writeText(accs[currentTarget.id].username)
+        messageApi.open({
+          type: 'success',
+          content: 'Username & Password Copied',
+        });
     },250)
   }
 
@@ -130,7 +129,8 @@ function App() {
   })
 
   listen('addAccount',e=>{
-    handleAccAddShow()
+    setCreateState(true);
+    setIsAccEditModalOpen(true);
   })
 
   listen('refresh',e=>{
@@ -138,8 +138,11 @@ function App() {
   })
 
   let ChangeData = () => {
-    const [Tname,setTName] = useState(name);
-    const [Tpassword,setTPassword] = useState(password);
+    const [name,setName] = useState(AccEditId!=-1?accs[AccEditId].name?accs[AccEditId].name:"":"");
+    const [password,setPassword] = useState(AccEditId!=-1?accs[AccEditId].password:"");
+    const [rank,setRank] = useState(AccEditId!=-1?accs[AccEditId].rank:"Unranked");
+    const [username,setUsername] = useState("");
+    console.log(createState)
 
     const reset = () =>{
       setUsername("")
@@ -153,19 +156,73 @@ function App() {
     }
 
     async function save(){
-      axios.post('https://vaccs.rkrao.repl.co/api/cors/changedata',{
+      if(createState&&!username){
+        messageApi.open({
+          type: 'error',
+          content: "Cannot save without Username",
+        });
+        return;
+      }
+      if(!password){
+        messageApi.open({
+          type: 'error',
+          content: "Cannot save without Password",
+        });
+        return;
+      }
+      if(createState){
+        axios.post('https://vaccs.rkrao.repl.co/api/cors/addid',{
         token:await store.get('token'),
-        name:Tname,
-        password:Tpassword,
-        rank
+        username,name,password,rank
       }).then(()=>{
-        location.reload();
+        messageApi.open({
+          type: 'success',
+          content: 'Account Added',
+        });
+        setIsAccEditModalOpen(false)
+        loadAccs();
       }).catch(err=>{
         messageApi.open({
           type: 'error',
           content: "Couldn't save the credentials",
         });
       })
+      }
+      else
+      axios.post('https://vaccs.rkrao.repl.co/api/cors/changedata',{
+        token:await store.get('token'),
+        username:accs[AccEditId].username,
+        name,password,rank
+      }).then(()=>{
+        /* location.reload(); */
+        messageApi.open({
+          type: 'success',
+          content: 'Credentials Changed',
+        });
+        setIsAccEditModalOpen(false)
+        loadAccs();
+        setAccEditId(-1)
+      }).catch(err=>{
+        messageApi.open({
+          type: 'error',
+          content: "Couldn't save the credentials",
+        });
+      })
+    }
+
+    let handleEditModalClose = () =>{
+      setAccEditId(-1)
+      setIsAccEditModalOpen(false)
+    }
+
+    let Username = () =>{
+      if(createState)
+        return(
+          <>
+          <label htmlFor="name">Username:</label><br/>
+          <input id="username" type="text" value={username} onChange={(e)=>{setUsername(e.currentTarget.value)}}/><br/><br/>
+          </>
+        )
     }
 
     let SelectRanks = ()  =>{
@@ -179,8 +236,6 @@ function App() {
           >
             {
               Object.keys(ranks).map(function(item,index){
-                console.log(item)
-                
                 if(ranks[item])
                   var rankImage = ranks[item]
                 return<Option key={index} value={item}>{item}<img style={{width:"2vw"}} src={rankImage}/></Option>
@@ -194,14 +249,25 @@ function App() {
     }
     
     if(AccEditId != -1)
+      var title = "Editting for Username: "+accs[AccEditId].username
+      if(createState)
+        title = "Add new Valorant ID"
     
       return(
         <>
-        <Modal title={"Editting for Username: "+accs[AccEditId].username} open={isAccEditModalOpen} onOk={(e)=>{save()}} onCancel={handleClose}>
+        <Modal title={title} open={isAccEditModalOpen} onOk={(e)=>{save()}} onCancel={handleEditModalClose}>
+          {
+            createState?
+            <>
+            <label htmlFor="name">Username:</label><br/>
+            <input id="username" type="text" value={username} onChange={(e)=>{setUsername(e.currentTarget.value)}}/><br/><br/>
+            </>:
+            <></>
+          }
           <label htmlFor="name">Name:</label><br/>
-          <input id="name" type="text" value={Tname} onChange={(e)=>{setTName(e.currentTarget.value)}}/><br/><br/>
+          <input id="name" type="text" value={name} onChange={(e)=>{setName(e.currentTarget.value)}}/><br/><br/>
           <label htmlFor="password">Password:</label><br/>
-          <input id="password" type="text" value={Tpassword} onChange={(e)=>{setTPassword(e.currentTarget.value)}} /><br/><br/>
+          <input id="password" type="text" value={password} onChange={(e)=>{setPassword(e.currentTarget.value)}} /><br/><br/>
           <label>Rank:</label><br/>
           <SelectRanks/>
         </Modal>

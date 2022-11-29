@@ -37,7 +37,8 @@ fn main() {
 
     let menu = Menu::new()
     .add_item(CustomMenuItem::new("refresh", "Refresh"))
-    .add_item(CustomMenuItem::new("addToken", "Manage Token"));
+    .add_item(CustomMenuItem::new("addToken", "Manage Token"))
+    .add_item(CustomMenuItem::new("addAccount", "Add Account"));
 
     tauri::Builder::default()
         .menu(menu)
@@ -49,18 +50,21 @@ fn main() {
               "refresh" =>{
                 event.window().app_handle().emit_all("refresh",true).ok();
               }
+              "addAccount" =>{
+                event.window().app_handle().emit_all("addAccount",true).ok();
+              }
               _ => {}
             }
           })
         .plugin(PluginBuilder::default().build())
         .invoke_handler(tauri::generate_handler![greet, test])
-        .on_window_event(|event| match event.event() {
+        /* .on_window_event(|event| match event.event() {
             tauri::WindowEvent::CloseRequested { api, .. } => {
                 event.window().hide().unwrap();
                 api.prevent_close();
             }
             _ => {}
-          })
+          }) */
         .system_tray(system_tray)
         .on_system_tray_event(|app, event| match event {
           SystemTrayEvent::LeftClick {
@@ -101,3 +105,4 @@ fn main() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
