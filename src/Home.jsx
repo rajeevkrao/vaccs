@@ -1,8 +1,7 @@
 import { useState,useEffect } from "react";
 /* import reactLogo from "./assets/react.svg"; */
 
-import { invoke } from "@tauri-apps/api/tauri";
-import { emit, listen } from '@tauri-apps/api/event'
+import { listen } from '@tauri-apps/api/event'
 import { appWindow } from '@tauri-apps/api/window'
 
 import BButton from 'react-bootstrap/Button';
@@ -60,8 +59,7 @@ function App() {
   }
 
   async function loadAccs(){
-    
-    axios.post('https://vaccs.rkrao.repl.co/api/cors/getAccs',{
+    axios.post('https://vaccs-express.vercel.app/',{
         token:await store.get('token')
     }).then(res=>{
         setAccs(res.data)
@@ -74,11 +72,21 @@ function App() {
   }
 
   async function loadRanks(){
-    axios.get('https://vaccs.rkrao.repl.co/ranks.json').then(res=>{
+    try{
+      const raw = await fetch('https://vranks.rkrao.me/ranks.json', {
+        header: {'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'}
+      })
+      const res = await raw.json()
+      setRanks(res);
+    }
+    catch(err){
+      console.log(err)
+    }
+    /* await axios.get('https://rajeevkrao.github.io/valorant-ranks/ranks.json', {mode: 'no-cors'}).then(res=>{
         setRanks(res.data)
     }).catch(err=>{
         console.log(err)
-    })
+    }) */
   }
 
   useEffect(()=>{
@@ -171,7 +179,7 @@ function App() {
         return;
       }
       if(createState){
-        axios.post('https://vaccs.rkrao.repl.co/api/cors/addid',{
+        axios.post('https://vaccs-express.vercel.app/addid',{
         token:await store.get('token'),
         username,name,password,rank
       }).then(()=>{
@@ -189,7 +197,7 @@ function App() {
       })
       }
       else
-      axios.post('https://vaccs.rkrao.repl.co/api/cors/changedata',{
+      axios.post('https://vaccs-express.vercel.app/changedata',{
         token:await store.get('token'),
         username:accs[AccEditId].username,
         name,password,rank
@@ -277,12 +285,13 @@ function App() {
 
   var Accs = () =>{
     /* console.log(ranks) */
-    if(accs && accs!=403)
+    if(accs && accs!=401)
     return(
         <>
           {accs.map(function(item,index){
               var rankImage = ''
-              if(ranks[item.rank])
+              if(ranks)
+              if(ranks[item?.rank])
                 rankImage = ranks[item.rank]
                       let title
                       if(item.name)
@@ -311,7 +320,7 @@ function App() {
           })}
         </>
     )
-    else if(accs==403)
+    else if(accs==401)
         return <div style={{
             margin:"10vh auto",
             fontSize:"5em",
