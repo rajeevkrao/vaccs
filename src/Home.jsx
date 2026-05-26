@@ -1,4 +1,5 @@
 import { useState,useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
 /* import reactLogo from "./assets/react.svg"; */
 
 import { listen } from '@tauri-apps/api/event'
@@ -7,10 +8,12 @@ import { appWindow } from '@tauri-apps/api/window'
 import BButton from 'react-bootstrap/Button';
 import BModal from 'react-bootstrap/Modal';
 
-import { Button, Modal, Select, message } from 'antd';
+import { Button, Modal, Select, message, Row, Col } from 'antd';
 const { Option } = Select;
 
-import { Spinner } from 'reactstrap';
+import { Accounts } from './components/Accounts';
+
+import { removeToast } from './redux/messageSlice';
 
 import { Store } from 'tauri-plugin-store-api';
 const store = new Store('.settings.dat');
@@ -18,6 +21,8 @@ const store = new Store('.settings.dat');
 import axios from 'axios';
 
 import "./App.css";
+
+import { invoke } from '@tauri-apps/api/tauri';
 
 function App() {
   appWindow.maximize();
@@ -33,10 +38,24 @@ function App() {
 
   const [messageApi, contextHolder] = message.useMessage();
 
+  const dispatch = useDispatch();
+  const toasts = useSelector((state) => state.message.toasts);
+
+  useEffect(() => {
+    if (toasts && toasts.length > 0) {
+      toasts.forEach((toast) => {
+        messageApi.open({
+          type: toast.type,
+          content: toast.content,
+        });
+        dispatch(removeToast(toast.id));
+      });
+    }
+  }, [toasts, messageApi, dispatch]);
+
   const handleClose = () => {
     setIsAccEditModalOpen(false);
     setShow(false);
-    
   }
 
   const handleShow = async() => {
@@ -101,36 +120,8 @@ function App() {
     return handleClose()
   }
 
-  async function copy(e){
-    let { currentTarget } = e;
-    navigator.clipboard.writeText(accs[currentTarget.id].password)
-    setTimeout(()=>{
-        navigator.clipboard.writeText(accs[currentTarget.id].username)
-        messageApi.open({
-          type: 'success',
-          content: 'Username & Password Copied',
-        });
-    },250)
-  }
 
-  async function copyUsername(e){
-    let { currentTarget } = e;
-    navigator.clipboard.writeText(accs[currentTarget.id].username)
-    messageApi.open({
-      type: 'success',
-      content: 'Username Copied',
-    });
-  }
 
-  async function copyPassword(e){
-    let { currentTarget } = e;
-    navigator.clipboard.writeText(accs[currentTarget.id].password)
-    messageApi.open({
-      type: 'success',
-      content: 'Password Copied',
-    });
-  }
-  
 
   listen('addToken',e=>{
     handleShow()
@@ -218,12 +209,12 @@ function App() {
       })
     }
 
-    let handleEditModalClose = () =>{
+    const handleEditModalClose = () =>{
       setAccEditId(-1)
       setIsAccEditModalOpen(false)
     }
 
-    let Username = () =>{
+    const Username = () =>{
       if(createState)
         return(
           <>
@@ -247,89 +238,55 @@ function App() {
                 if(ranks[item])
                   var rankImage = ranks[item]
                 return<Option key={index} value={item}>{item}<img style={{width:"2vw"}} src={rankImage}/></Option>
-  
-                
               })
             }
           </Select>
           </>
         )
     }
+
+    const updateRankApi = async() => {
+      try{
+        const { data } = await axios.post('http://localhost:3000/updateRank', {username: accs[AccEditId].username})
+        console.log({data})
+      }
+      catch(err){
+        console.log(err);
+      }
+      
+    }
     
     if(AccEditId != -1)
       var title = "Editting for Username: "+accs[AccEditId].username
       if(createState)
         title = "Add new Valorant ID"
-    
       return(
         <>
         <Modal title={title} open={isAccEditModalOpen} onOk={(e)=>{save()}} onCancel={handleEditModalClose}>
-          {
-            createState?
-            <>
-            <label htmlFor="name">Username:</label><br/>
-            <input id="username" type="text" value={username} onChange={(e)=>{setUsername(e.currentTarget.value)}}/><br/><br/>
-            </>:
-            <></>
-          }
-          <label htmlFor="name">Name:</label><br/>
-          <input id="name" type="text" value={name} onChange={(e)=>{setName(e.currentTarget.value)}}/><br/><br/>
-          <label htmlFor="password">Password:</label><br/>
-          <input id="password" type="text" value={password} onChange={(e)=>{setPassword(e.currentTarget.value)}} /><br/><br/>
-          <label>Rank:</label><br/>
-          <SelectRanks/>
+          <Row justify="space-between">
+            <Col span={12}>
+              {
+                createState?
+                <>
+                <label htmlFor="name">Username:</label><br/>
+                <input id="username" type="text" value={username} onChange={(e)=>{setUsername(e.currentTarget.value)}}/><br/><br/>
+                </>:
+                <></>
+              }
+              <label htmlFor="name">Name:</label><br/>
+              <input id="name" type="text" value={name} onChange={(e)=>{setName(e.currentTarget.value)}}/><br/><br/>
+              <label htmlFor="password">Password:</label><br/>
+              <input id="password" type="text" value={password} onChange={(e)=>{setPassword(e.currentTarget.value)}} /><br/><br/>
+              <label>Rank:</label><br/>
+              <SelectRanks/>
+            </Col>
+            <Col style={{textAlign:"right"}} span={12}>
+              <Button onClick={(e)=>{updateRankApi()}} type='primary'>Refresh Rank</Button>
+            </Col>
+          </Row>
         </Modal>
         </>
       )
-  }
-
-  var Accs = () =>{
-    /* console.log(ranks) */
-    if(accs && accs!=401)
-    return(
-        <>
-          {accs.map(function(item,index){
-              var rankImage = ''
-              if(ranks)
-              if(ranks[item?.rank])
-                rankImage = ranks[item.rank]
-                      let title
-                      if(item.name)
-                          title = "Name: "+item.name
-                      else
-                          title = "Username: "+item.username
-              return<div key={index} className="card">
-              <div data-id="{index}" className="card-body">
-                <div style={{textAlign:"right", position:"absolute", right:"1vw", bottom:"1vh"}}>
-                      <button id={index} onClick={(e)=>{/* Pending Work for Starred */}} className="copy action"><i className="fa-regular fa-star"></i></button><br/>
-                      <button id={index} onClick={(e)=>{handleAccEditShow(e)}} className="copy action"><i className="fa-regular fa-pen-to-square"></i></button>
-                      <button id={index} onClick={(e)=>{copy(e)}} className="copy action"><i className="fa-regular fa-copy"></i></button><br/>
-                      
-                </div>
-                <h5 className="card-title">{title}
-                  
-                </h5>
-                <p className="card-text">
-                  Username: {item.username} <span id={index} onClick={(e)=>{copyUsername(e)}} className="copy"><i className="fa-regular fa-copy"></i></span><br/>
-                  Password: ********{/* {item.password} */} <span id={index} onClick={(e)=>{copyPassword(e)}} className="copy"><i className="fa-regular fa-copy"></i></span><br/>
-                  Rank: {item.rank}<br/> 
-                  <span><img className="rank" src={rankImage}/></span>
-                </p>
-              </div>
-            </div>
-          })}
-        </>
-    )
-    else if(accs==401)
-        return <div style={{
-            margin:"10vh auto",
-            fontSize:"5em",
-            color:"red"
-        }}>Unauthorised</div>
-    else
-        return <Spinner style={{
-            margin:"10vh auto"
-        }} color="primary" />
   }
 
   return (
@@ -355,7 +312,7 @@ function App() {
       {contextHolder}
       <div className="container">
         <div className="row">
-        <Accs/>
+        <Accounts accs={accs} ranks={ranks} handleAccEdit={handleAccEditShow}/>
         </div>
       </div>
       
