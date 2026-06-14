@@ -12,6 +12,7 @@ import { Button, Modal, Select, message, Row, Col } from 'antd';
 const { Option } = Select;
 
 import { Accounts } from './components/Accounts';
+import { AccountCard } from './components/AccountCard';
 
 import { removeToast } from './redux/messageSlice';
 
@@ -34,6 +35,11 @@ function App() {
 
   const [isAccEditModalOpen, setIsAccEditModalOpen] = useState(false);
   const [AccEditId, setAccEditId] = useState(-1);
+
+  const [isHiddenModalOpen, setIsHiddenModalOpen] = useState(false);
+  const [hiddenAccs, setHiddenAccs] = useState([]);
+  const [isLoadingHidden, setIsLoadingHidden] = useState(false);
+  const [isEditingHidden, setIsEditingHidden] = useState(false);
 
 
   const [messageApi, contextHolder] = message.useMessage();
@@ -67,15 +73,20 @@ function App() {
   }
 
   const handleAccEditShow = (e) =>{
-    let { currentTarget } = e;
-    setAccEditId(currentTarget.id)
+    const id = (e && typeof e === 'object' && e.currentTarget) ? e.currentTarget.id : e;
+    setAccEditId(id)
     setCreateState(false);
+    setIsEditingHidden(false);
     setIsAccEditModalOpen(true);
   }
 
-  const handleAccAddShow = () =>{
-    
+  const handleHiddenAccEditShow = (index) => {
+    setAccEditId(index);
+    setCreateState(false);
+    setIsEditingHidden(true);
+    setIsAccEditModalOpen(true);
   }
+
 
   async function loadAccs(){
     axios.post('https://vaccs-express.vercel.app/',{
@@ -108,6 +119,29 @@ function App() {
     }) */
   }
 
+  async function loadHiddenAccs(){
+    const tokenVal = await store.get('token');
+    if (!tokenVal || tokenVal === "null" || tokenVal === "undefined" || (typeof tokenVal === 'string' && tokenVal.trim() === "")) {
+      setHiddenAccs([]);
+      return;
+    }
+    setIsLoadingHidden(true);
+    try {
+      const res = await axios.post('https://vaccs-express.vercel.app/hidden', {
+        token: tokenVal
+      });
+      setHiddenAccs(res.data);
+    } catch(err) {
+      console.error(err);
+      messageApi.open({
+        type: 'error',
+        content: "Failed to load hidden accounts",
+      });
+    } finally {
+      setIsLoadingHidden(false);
+    }
+  }
+
   useEffect(()=>{
     loadAccs()
     loadRanks()
@@ -123,23 +157,40 @@ function App() {
 
 
 
-  listen('addToken',e=>{
-    handleShow()
-  })
-
-  listen('addAccount',e=>{
-    setCreateState(true);
-    setIsAccEditModalOpen(true);
-  })
-
-  listen('refresh',e=>{
-    location.reload();
-  })
+  useEffect(() => {
+    let unlistens = [];
+    const setup = async () => {
+      unlistens.push(await listen('addToken', e => {
+        handleShow();
+      }));
+      unlistens.push(await listen('addAccount', e => {
+        setCreateState(true);
+        setIsAccEditModalOpen(true);
+      }));
+      unlistens.push(await listen('refresh', e => {
+        location.reload();
+      }));
+      unlistens.push(await listen('viewHidden', e => {
+        setIsHiddenModalOpen(open => {
+          if (!open) {
+            loadHiddenAccs();
+            return true;
+          }
+          return open;
+        });
+      }));
+    };
+    setup();
+    return () => {
+      unlistens.forEach(fn => fn());
+    };
+  }, []);
 
   let ChangeData = () => {
-    const [name,setName] = useState(AccEditId!=-1?accs[AccEditId].name?accs[AccEditId].name:"":"");
-    const [password,setPassword] = useState(AccEditId!=-1?accs[AccEditId].password:"");
-    const [rank,setRank] = useState(AccEditId!=-1?accs[AccEditId].rank:"Unranked");
+    const activeAcc = isEditingHidden ? hiddenAccs[AccEditId] : (accs ? accs[AccEditId] : null);
+    const [name,setName] = useState(AccEditId!=-1?activeAcc?.name?activeAcc.name:"":"");
+    const [password,setPassword] = useState(AccEditId!=-1?activeAcc?.password:"");
+    const [rank,setRank] = useState(AccEditId!=-1?activeAcc?.rank:"Unranked");
     const [username,setUsername] = useState("");
     console.log(createState)
 
@@ -190,7 +241,7 @@ function App() {
       else
       axios.post('https://vaccs-express.vercel.app/changedata',{
         token:await store.get('token'),
-        username:accs[AccEditId].username,
+        username:activeAcc?.username,
         name,password,rank
       }).then(()=>{
         /* location.reload(); */
@@ -200,6 +251,9 @@ function App() {
         });
         setIsAccEditModalOpen(false)
         loadAccs();
+        if(isEditingHidden){
+          loadHiddenAccs();
+        }
         setAccEditId(-1)
       }).catch(err=>{
         messageApi.open({
@@ -211,6 +265,7 @@ function App() {
 
     const handleEditModalClose = () =>{
       setAccEditId(-1)
+      setIsEditingHidden(false)
       setIsAccEditModalOpen(false)
     }
 
@@ -247,7 +302,7 @@ function App() {
 
     const updateRankApi = async() => {
       try{
-        const { data } = await axios.post('http://localhost:3000/updateRank', {username: accs[AccEditId].username})
+        const { data } = await axios.post('http://localhost:3000/updateRank', {username: activeAcc?.username})
         console.log({data})
       }
       catch(err){
@@ -255,9 +310,35 @@ function App() {
       }
       
     }
+
+    const toggleHide = async () => {
+      if (!activeAcc) return;
+      const isCurrentlyHidden = activeAcc.hide || activeAcc.hidden;
+      const targetVal = !isCurrentlyHidden;
+      try {
+        await axios.post('https://vaccs-express.vercel.app/changedata', {
+          token: await store.get('token'),
+          username: activeAcc.username,
+          hidden: targetVal
+        });
+        messageApi.open({
+          type: 'success',
+          content: targetVal ? 'Account Hidden' : 'Account Unhidden',
+        });
+        setIsAccEditModalOpen(false);
+        loadAccs();
+        loadHiddenAccs();
+      } catch (err) {
+        console.error(err);
+        messageApi.open({
+          type: 'error',
+          content: "Failed to update hide status",
+        });
+      }
+    }
     
     if(AccEditId != -1)
-      var title = "Editting for Username: "+accs[AccEditId].username
+      var title = "Editting for Username: "+(activeAcc?.username || "")
       if(createState)
         title = "Add new Valorant ID"
       return(
@@ -282,6 +363,17 @@ function App() {
             </Col>
             <Col style={{textAlign:"right"}} span={12}>
               <Button onClick={(e)=>{updateRankApi()}} type='primary'>Refresh Rank</Button>
+              {
+                !createState && (
+                  <Button 
+                    onClick={toggleHide} 
+                    danger={!(activeAcc?.hide || activeAcc?.hidden)}
+                    style={{ marginTop: '10px', display: 'block', marginLeft: 'auto' }}
+                  >
+                    { (activeAcc?.hide || activeAcc?.hidden) ? 'Unhide' : 'Hide' }
+                  </Button>
+                )
+              }
             </Col>
           </Row>
         </Modal>
@@ -317,6 +409,41 @@ function App() {
       </div>
       
       <ChangeData/>
+
+      <Modal
+        title="Hidden Accounts"
+        open={isHiddenModalOpen}
+        onCancel={() => setIsHiddenModalOpen(false)}
+        footer={[
+          <Button key="close" onClick={() => setIsHiddenModalOpen(false)}>
+            Close
+          </Button>
+        ]}
+        width="90vw"
+        style={{ top: '3vh', maxHeight: '94vh', overflow: 'hidden' }}
+      >
+        {isLoadingHidden ? (
+          <p>Loading...</p>
+        ) : hiddenAccs && hiddenAccs.length > 0 ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', maxHeight: 'calc(100vh - 220px)', overflowY: 'auto', padding: '10px' }}>
+            {hiddenAccs.map((item, index) => {
+              return (
+                <AccountCard
+                  key={index}
+                  item={item}
+                  index={index}
+                  ranks={ranks}
+                  handleEdit={(idx) => handleHiddenAccEditShow(idx)}
+                  onCopy={(msg) => messageApi.open({ type: 'success', content: msg })}
+                  style={{ flex: '1 0 30%', margin: '1vh 0.5vw', maxWidth: '30%', minWidth: '220px' }}
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <p>No hidden accounts found.</p>
+        )}
+      </Modal>
 
       <BModal show={show} onHide={handleClose}>
         <BModal.Header closeButton>

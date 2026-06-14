@@ -39,7 +39,8 @@ fn main() {
     let menu = Menu::new()
         .add_item(CustomMenuItem::new("refresh", "Refresh"))
         .add_item(CustomMenuItem::new("addToken", "Manage Token"))
-        .add_item(CustomMenuItem::new("addAccount", "Add Account"));
+        .add_item(CustomMenuItem::new("addAccount", "Add Account"))
+        .add_item(CustomMenuItem::new("viewHidden", "View Hidden Accounts"));
 
     tauri::Builder::default()
         .menu(menu)
@@ -55,6 +56,13 @@ fn main() {
                     .window()
                     .app_handle()
                     .emit_all("addAccount", true)
+                    .ok();
+            }
+            "viewHidden" => {
+                event
+                    .window()
+                    .app_handle()
+                    .emit_all("viewHidden", true)
                     .ok();
             }
             _ => {}
